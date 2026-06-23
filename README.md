@@ -1,11 +1,7 @@
 # tiny-reactivity-engine
 
-Uma mini engine de reatividade feita do zero em TypeScript, inspirada nas ideias por trás de
-**SolidJS**, **Vue 3** e **React Signals**.
-
-A engine inteira cabe em poucos arquivos pequenos. O objetivo não é competir com essas
-bibliotecas, e sim mostrar como o rastreamento automático de
-dependências funciona.
+Uma mini engine de reatividade em TypeScript, feita do zero pra entender como signals e effects
+funcionam por dentro. Inspirada em SolidJS, Vue 3 e React Signals.
 
 ```ts
 const count = signal(0)
@@ -24,113 +20,70 @@ count changed: 1
 count changed: 2
 ```
 
-O effect roda uma vez na criação e depois se re-executa sozinho sempre que um valor que ele leu
-muda. Ninguém ligou `count` ao effect manualmente, a dependência foi descoberta em tempo de
-execução.
+O effect roda uma vez e depois se re-executa sozinho toda vez que um valor que ele leu muda.
+Ninguém ligou `count` ao effect na mão.
 
-## O que é reatividade?
+## A ideia
 
-A ideia é simples: você liga um valor a um pedaço de código uma vez, e ele roda de novo sozinho
-toda vez que esse valor muda. Você não precisa lembrar de chamar nenhuma atualização na mão.
+São dois primitivos:
 
-Dois primitivos bastam:
+- **signal**: um valor que você lê e escreve.
+- **effect**: uma função que lê signals e roda de novo quando algum deles muda.
 
-- **signal** — um contêiner de valor que você lê e escreve.
-- **effect** — uma função que lê signals e re-executa automaticamente quando algum deles muda.
+## Como as dependências são rastreadas
 
-## Como o rastreamento de dependências funciona
-
-Não há compilador nem análise do seu código. Tudo depende de **uma única variável
-compartilhada: o effect em execução no momento**.
+O truque é uma variável global que aponta pro effect que está rodando no momento:
 
 ```ts
 let activeSub: Subscriber | null = null
 ```
 
-O fluxo é:
-
-1. Ao rodar, o effect se define como `activeSub`, chama sua função e restaura o valor anterior.
-2. Durante a execução, cada leitura `signal.value` chama `track()`. Como `activeSub` aponta para
-   o effect em execução, o signal sabe exatamente quem o leu e o adiciona ao seu conjunto de
-   subscribers.
-3. O effect também guarda em quais conjuntos entrou, para conseguir se desinscrever depois.
+Quando um effect roda, ele se coloca em `activeSub` e chama a função. Toda leitura `signal.value`
+durante essa execução chama `track()`, e como `activeSub` aponta pro effect atual, o signal sabe
+quem o leu e guarda numa lista de subscribers. Quando o valor muda, ele avisa essa lista
+(`trigger`) e os effects rodam de novo. Se o valor novo for igual ao antigo (`Object.is`), nada
+acontece.
 
 ```ts
 function runWithSub(sub, fn) {
-  cleanup(sub)            // descarta as inscrições da execução anterior
+  cleanup(sub)
   const prev = activeSub
-  activeSub = sub         // "eu sou o leitor atual"
-  try { return fn() }     // toda leitura durante fn() se inscreve em `sub`
+  activeSub = sub
+  try { return fn() }
   finally { activeSub = prev }
 }
 ```
 
-Na escrita, `signal.value = x` atualiza o valor e notifica os subscribers (`trigger`). Se o novo
-valor for igual ao antigo (`Object.is`), nada acontece.. e é isso que evita re-execuções
-desnecessárias.
+Antes de cada execução o effect limpa as dependências antigas e reconstrói. Assim um signal lido
+só dentro de um `if` se desinscreve sozinho quando aquele ramo para de rodar.
 
-Dois detalhes deixam o mecanismo robusto:
-
-- **Cleanup antes de cada execução.** As dependências são limpas e reconstruídas a cada run, então
-  um effect que lê um signal só dentro de um `if` se desinscreve sozinho quando aquele ramo deixa
-  de rodar. Sem inscrições órfãs.
-- **Links bidirecionais.** Cada signal conhece seus subscribers, e cada effect conhece os
-  conjuntos a que pertence. Isso torna notificação e cleanup O(deps).
-
-É essencialmente o mesmo mecanismo que Vue 3 e SolidJS usam internamente: um "observador ativo"
-global ao qual os signals se ligam durante as leituras.
+É o mesmo mecanismo por trás de SolidJS e Vue 3: um observador global que os signals registram
+durante a leitura, pra atualizar só o que realmente depende do valor.
 
 ## Extras
 
-Todos opcionais e pequenos:
-
-- **`computed(fn)`** — valor derivado lazy e com cache. Só recalcula quando é lido *e* alguma
-  dependência mudou.
-- **dispose** — `effect()` retorna uma função que o desinscreve. Após o dispose, mudanças de valor
-  não o disparam mais.
-- **`batch(fn)`** — agrupa várias escritas para que os effects dependentes rodem uma vez só no
-  final, em vez de a cada escrita.
-
-## Como frameworks modernos usam isso
-
-A mesma ideia move frameworks reais, com a UI no papel de "effect":
-
-- **SolidJS** renderiza componentes rodando-os dentro de effects. Ler um signal no JSX inscreve
-  aquele pedaço do DOM, então só o nó exato que depende do valor atualiza — sem virtual DOM.
-- **Vue 3** constrói `ref` / `reactive` sobre esse modelo. A render function é um effect; mudar o
-  estado reativo re-executa só as renders afetadas.
-- **React Signals** trazem o mesmo rastreamento fino ao React, atualizando sem re-render completo.
+- **computed(fn)**: valor derivado com cache, só recalcula quando é lido e alguma dependência mudou.
+- **dispose**: `effect()` devolve uma função que cancela ele.
+- **batch(fn)**: junta várias escritas pra rodar os effects uma vez só no fim.
 
 ## Estrutura
 
 ```
 src/
   signal.ts     signal() e a classe Signal
-  effect.ts     effect(), batch() e o runtime de rastreamento
-  computed.ts   valores derivados com computed()
-  index.ts      exports públicos
+  effect.ts     effect(), batch() e o rastreamento
+  computed.ts   computed()
+  index.ts      exports
 examples/
-  basic.ts
-  computed.ts
-  batch.ts
 ```
 
-## Rodando os exemplos
-
-Requer Node.js 18+.
+## Rodando
 
 ```bash
 npm install
-
 npm run example:basic
 npm run example:computed
 npm run example:batch
-```
-
-Checar tipos:
-
-```bash
-npm run typecheck
 ```
 
 ## Licença
