@@ -1,0 +1,17 @@
+{
+  "name": "tiny-reactivity-engine",
+  "version": "1.0.0",
+  "description": "A minimal reactivity engine (signals & effects) inspired by SolidJS, Vue, and React Signals.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "example:basic": "tsx examples/basic.ts",
+    "example:computed": "tsx examples/computed.ts",
+    "example:batch": "tsx examples/batch.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
