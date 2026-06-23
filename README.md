@@ -1,4 +1,4 @@
-# tiny-reactivity-engine
+# TinyReactivityEngine
 
 Uma mini engine de reatividade em TypeScript, feita do zero pra entender como signals e effects
 funcionam por dentro. Inspirada em SolidJS, Vue 3 e React Signals.
